@@ -1,21 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import useLocalStorageState from "use-local-storage-state";
 
-import { MobileWalletProvider } from "../mobileProviders/MobileWalletProvider";
 import { WalletProvider } from "../providers/WalletProvider";
 import { WalletConnection } from "../internals/wallet";
-import { MobileConnectResponse } from "../internals/provider";
 import { TransactionMsg, SimulateResult, BroadcastResult, SigningResult } from "../internals/transaction";
 import { ShuttleStore, useShuttleStore } from "./store";
 
 type ShuttleContextType = {
   providers: WalletProvider[];
-  mobileProviders: MobileWalletProvider[];
-  mobileConnect: (options: {
-    mobileProviderId: string;
-    chainId: string;
-    callback?: (walletConnection: WalletConnection) => void;
-  }) => Promise<MobileConnectResponse>;
   connect: (options: { providerId: string; chainId: string }) => Promise<WalletConnection>;
   wallets: WalletConnection[];
   getWallets: (filters?: { providerId?: string; chainId?: string }) => WalletConnection[];
@@ -51,7 +43,6 @@ export const ShuttleProvider = ({
   persistent = false,
   persistentKey = "shuttle",
   providers = [],
-  mobileProviders = [],
   store,
   children,
   withLogging = false,
@@ -59,13 +50,11 @@ export const ShuttleProvider = ({
   persistent?: boolean;
   persistentKey?: string;
   providers: WalletProvider[];
-  mobileProviders: MobileWalletProvider[];
   store?: ShuttleStore;
   children?: React.ReactNode;
   withLogging?: boolean;
 }) => {
   const [availableProviders, setAvailableProviders] = useState<WalletProvider[]>([]);
-  const [availableMobileProviders, setAvailableMobileProviders] = useState<MobileWalletProvider[]>([]);
 
   const internalStore = useShuttleStore();
   const [walletConnections, setWalletConnections] = useLocalStorageState<WalletConnection[]>(
@@ -119,29 +108,6 @@ export const ShuttleProvider = ({
   );
 
   const providerInterface = useMemo(() => {
-    const mobileConnect = async ({
-      mobileProviderId,
-      chainId,
-      callback,
-    }: {
-      mobileProviderId: string;
-      chainId: string;
-      callback?: (walletConnection: WalletConnection) => void;
-    }) => {
-      const mobileProvider = availableMobileProviders.find((mobileProvider) => mobileProvider.id === mobileProviderId);
-      if (!mobileProvider) {
-        throw new Error(`Mobile provider ${mobileProviderId} not found`);
-      }
-
-      return mobileProvider.connect({
-        chainId,
-        callback: (wallet) => {
-          addWallet(wallet);
-          callback?.(wallet);
-        },
-      });
-    };
-
     const connect = async ({
       providerId,
       chainId,
@@ -161,9 +127,7 @@ export const ShuttleProvider = ({
 
     const disconnect = (filters?: { providerId?: string; chainId?: string }) => {
       internalStore.getWallets(filters).forEach((wallet) => {
-        const provider =
-          availableProviders.find((provider) => provider.id === wallet.providerId) ||
-          availableMobileProviders.find((mobileProvider) => mobileProvider.id === wallet.providerId);
+        const provider = availableProviders.find((provider) => provider.id === wallet.providerId);
         if (provider) {
           provider.disconnect({ wallet });
         }
@@ -173,9 +137,7 @@ export const ShuttleProvider = ({
     };
 
     const disconnectWallet = (wallet: WalletConnection) => {
-      const provider =
-        availableProviders.find((provider) => provider.id === wallet.providerId) ||
-        availableMobileProviders.find((mobileProvider) => mobileProvider.id === wallet.providerId);
+      const provider = availableProviders.find((provider) => provider.id === wallet.providerId);
 
       if (provider) {
         provider.disconnect({ wallet });
@@ -190,9 +152,7 @@ export const ShuttleProvider = ({
         throw new Error("No wallet to simulate with");
       }
 
-      const provider =
-        availableProviders.find((provider) => provider.id === walletToUse.providerId) ||
-        availableMobileProviders.find((mobileProvider) => mobileProvider.id === walletToUse.providerId);
+      const provider = availableProviders.find((provider) => provider.id === walletToUse.providerId);
 
       if (!provider) {
         throw new Error(`Provider ${walletToUse.providerId} not found`);
@@ -226,9 +186,7 @@ export const ShuttleProvider = ({
         throw new Error("No wallet to broadcast with");
       }
 
-      const provider =
-        availableProviders.find((provider) => provider.id === walletToUse.providerId) ||
-        availableMobileProviders.find((mobileProvider) => mobileProvider.id === walletToUse.providerId);
+      const provider = availableProviders.find((provider) => provider.id === walletToUse.providerId);
 
       if (!provider) {
         throw new Error(`Provider ${walletToUse.providerId} not found`);
@@ -257,9 +215,7 @@ export const ShuttleProvider = ({
         throw new Error("No wallet to sign with");
       }
 
-      const provider =
-        availableProviders.find((provider) => provider.id === walletToUse.providerId) ||
-        availableMobileProviders.find((mobileProvider) => mobileProvider.id === walletToUse.providerId);
+      const provider = availableProviders.find((provider) => provider.id === walletToUse.providerId);
 
       if (!provider) {
         throw new Error(`Provider ${walletToUse.providerId} not found`);
@@ -270,8 +226,6 @@ export const ShuttleProvider = ({
 
     return {
       providers,
-      mobileProviders,
-      mobileConnect,
       connect,
       wallets,
       getWallets,
@@ -284,11 +238,9 @@ export const ShuttleProvider = ({
     };
   }, [
     providers,
-    mobileProviders,
     wallets,
     getWallets,
     recentWallet,
-    availableMobileProviders,
     internalStore,
     availableProviders,
     addWallet,
@@ -308,22 +260,6 @@ export const ShuttleProvider = ({
         })
         .catch(() => {
           removeWallet(providerWallet);
-        });
-    });
-  };
-
-  const updateMobileWallets = (mobileProvider: MobileWalletProvider) => {
-    getWallets({ providerId: mobileProvider.id }).forEach((mobileProviderWallet) => {
-      mobileProvider
-        .getWalletConnection({ chainId: mobileProviderWallet.network.chainId })
-        .then((wallet) => {
-          if (mobileProviderWallet.id !== wallet.id) {
-            removeWallet(mobileProviderWallet);
-            addWallet(wallet);
-          }
-        })
-        .catch(() => {
-          removeWallet(mobileProviderWallet);
         });
     });
   };
@@ -353,30 +289,6 @@ export const ShuttleProvider = ({
             setAvailableProviders((prev) => {
               const rest = prev.filter((p) => p.id !== provider.id);
               return [...rest, provider];
-            });
-          })
-          .catch((e) => {
-            if (withLogging) {
-              console.warn("Shuttle: ", e);
-            }
-          });
-      });
-
-    mobileProviders
-      .filter((mobileProvider) => !mobileProvider.initializing && !mobileProvider.initialized)
-      .forEach((mobileProvider) => {
-        mobileProvider
-          .init()
-          .then(() => {
-            updateMobileWallets(mobileProvider);
-
-            mobileProvider.setOnUpdateCallback(() => {
-              updateMobileWallets(mobileProvider);
-            });
-
-            setAvailableMobileProviders((prev) => {
-              const rest = prev.filter((p) => p.id !== mobileProvider.id);
-              return [...rest, mobileProvider];
             });
           })
           .catch((e) => {
