@@ -7,14 +7,6 @@ import { CosmWasmClient, SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate
 import { SignMode } from "cosmjs-types/cosmos/tx/signing/v1beta1/signing";
 import { TxRaw, TxBody, AuthInfo, Fee as CosmosFee } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { PubKey } from "cosmjs-types/cosmos/crypto/secp256k1/keys";
-import {
-  BaseAccount,
-  ChainRestAuthApi,
-  createTransactionAndCosmosSignDoc,
-  TxRestApi,
-  hexToBase64,
-} from "@injectivelabs/sdk-ts";
-import { BigNumberInBase } from "@injectivelabs/utils";
 
 import {
   Network,
@@ -27,14 +19,13 @@ import {
   DEFAULT_GAS_MULTIPLIER,
   DEFAULT_GAS_PRICE,
   DEFAULT_CURRENCY,
-  isInjectiveNetwork,
   Fee,
-  prepareMessagesForInjective,
   Algo,
   Coin,
 } from "../internals";
 import MobileWalletProvider from "./MobileWalletProvider";
 import FakeOfflineSigner from "../internals/cosmos/FakeOfflineSigner";
+import { hexToBase64 } from "../utils";
 
 type KeplrAccount = {
   address: string;
@@ -289,66 +280,29 @@ export const MobileCosmostationProvider = class MobileCosmostationProvider imple
       throw new Error("Wallet not connected");
     }
 
-    if (isInjectiveNetwork(network.chainId)) {
-      const chainRestAuthApi = new ChainRestAuthApi(network.rest);
-      const accountDetailsResponse = await chainRestAuthApi.fetchAccount(wallet.account.address);
-      const baseAccount = BaseAccount.fromRestApi(accountDetailsResponse);
+    const signer = new FakeOfflineSigner(wallet);
+    const gasPrice = GasPrice.fromString(network.gasPrice || DEFAULT_GAS_PRICE);
+    const client = await SigningCosmWasmClient.connectWithSigner(network.rpc, signer, { gasPrice });
 
-      const preparedTx = createTransactionAndCosmosSignDoc({
-        pubKey: wallet.account.pubkey || "",
-        chainId: network.chainId,
-        message: prepareMessagesForInjective(messages),
-        sequence: baseAccount.sequence,
-        accountNumber: baseAccount.accountNumber,
-      });
+    const processedMessages = messages.map((message) => message.toCosmosMsg());
 
-      const txRestApi = new TxRestApi(network.rest);
-      const txRaw = preparedTx.txRaw;
-      txRaw.signatures = [new Uint8Array(0)];
+    try {
+      const gasEstimation = await client.simulate(wallet.account.address, processedMessages, "");
 
-      try {
-        const txClientSimulateResponse = await txRestApi.simulate(txRaw);
+      const fee = calculateFee(
+        Math.round(gasEstimation * DEFAULT_GAS_MULTIPLIER),
+        network.gasPrice || DEFAULT_GAS_PRICE,
+      ) as Fee;
 
-        const fee = calculateFee(
-          Math.round((txClientSimulateResponse.gasInfo?.gasUsed || 0) * DEFAULT_GAS_MULTIPLIER),
-          network.gasPrice || "0.0005inj",
-        ) as Fee;
-
-        return {
-          success: true,
-          fee,
-        };
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error?.errorMessage || error?.message,
-        };
-      }
-    } else {
-      const signer = new FakeOfflineSigner(wallet);
-      const gasPrice = GasPrice.fromString(network.gasPrice || DEFAULT_GAS_PRICE);
-      const client = await SigningCosmWasmClient.connectWithSigner(network.rpc, signer, { gasPrice });
-
-      const processedMessages = messages.map((message) => message.toCosmosMsg());
-
-      try {
-        const gasEstimation = await client.simulate(wallet.account.address, processedMessages, "");
-
-        const fee = calculateFee(
-          Math.round(gasEstimation * DEFAULT_GAS_MULTIPLIER),
-          network.gasPrice || DEFAULT_GAS_PRICE,
-        ) as Fee;
-
-        return {
-          success: true,
-          fee,
-        };
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error?.message,
-        };
-      }
+      return {
+        success: true,
+        fee,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error?.message,
+      };
     }
   }
 
@@ -398,35 +352,15 @@ export const MobileCosmostationProvider = class MobileCosmostationProvider imple
       };
     }
 
-    if (isInjectiveNetwork(network.chainId)) {
-      const txRestApi = new TxRestApi(overrides?.rest || network.rest);
+    const client = await CosmWasmClient.connect(overrides?.rpc || network.rpc);
 
-      const txRaw = TxRaw.fromPartial(signResult.response);
+    const broadcast = await client.broadcastTx(TxRaw.encode(signResult.response).finish(), 15000, 2500);
 
-      const broadcast = await txRestApi.broadcast(txRaw);
-
-      if (broadcast.code !== 0) {
-        throw new Error(broadcast.rawLog);
-      }
-
-      const response = await txRestApi.fetchTxPoll(broadcast.txHash, 15000);
-
-      return {
-        hash: response.txHash,
-        rawLogs: response.rawLog,
-        response: response,
-      };
-    } else {
-      const client = await CosmWasmClient.connect(overrides?.rpc || network.rpc);
-
-      const broadcast = await client.broadcastTx(TxRaw.encode(signResult.response).finish(), 15000, 2500);
-
-      return {
-        hash: broadcast.transactionHash,
-        rawLogs: broadcast.rawLog || "",
-        response: broadcast,
-      };
-    }
+    return {
+      hash: broadcast.transactionHash,
+      rawLogs: broadcast.rawLog || "",
+      response: broadcast,
+    };
   }
 
   async sign({
@@ -471,32 +405,16 @@ export const MobileCosmostationProvider = class MobileCosmostationProvider imple
       gas: gasLimit || gas,
     };
 
-    if (isInjectiveNetwork(network.chainId)) {
-      const chainRestAuthApi = new ChainRestAuthApi(network.rest);
-      const accountDetailsResponse = await chainRestAuthApi.fetchAccount(wallet.account.address);
-      const baseAccount = BaseAccount.fromRestApi(accountDetailsResponse);
-      accountNumber = baseAccount.accountNumber.toString() || "";
-      sequence = baseAccount.sequence.toString() || "";
+    const client = await CosmWasmClient.connect(network.rpc);
+    const accountInfo = await client.getAccount(wallet.account.address);
+    accountNumber = accountInfo?.accountNumber.toString() || "";
+    sequence = accountInfo?.sequence.toString() || "";
 
-      if (feeAmount && feeAmount != "auto") {
-        feeAmount = String(new BigNumberInBase(feeAmount).times(10 ** (feeCurrency.coinDecimals - 6)).toFixed(0));
-        fee = {
-          amount: [{ amount: feeAmount || gas, denom: gasPrice.denom }],
-          gas: gasLimit || gas,
-        };
-      }
-    } else {
-      const client = await CosmWasmClient.connect(network.rpc);
-      const accountInfo = await client.getAccount(wallet.account.address);
-      accountNumber = accountInfo?.accountNumber.toString() || "";
-      sequence = accountInfo?.sequence.toString() || "";
-
-      if (feeAmount && feeAmount != "auto") {
-        fee = {
-          amount: [{ amount: feeAmount || gas, denom: gasPrice.denom }],
-          gas: gasLimit || gas,
-        };
-      }
+    if (feeAmount && feeAmount != "auto") {
+      fee = {
+        amount: [{ amount: feeAmount || gas, denom: gasPrice.denom }],
+        gas: gasLimit || gas,
+      };
     }
 
     const signDoc: StdSignDoc = {
@@ -540,10 +458,6 @@ export const MobileCosmostationProvider = class MobileCosmostationProvider imple
           {
             publicKey: {
               typeUrl: (() => {
-                if (isInjectiveNetwork(network.chainId)) {
-                  return "/injective.crypto.v1beta1.ethsecp256k1.PubKey";
-                }
-
                 return "/cosmos.crypto.secp256k1.PubKey";
               })(),
               value: PubKey.encode({

@@ -7,6 +7,5 @@ export * from "./XDefiProvider";
 export * from "./XDEFICosmosProvider";
 export * from "./FalconProvider";
 export * from "./CosmostationProvider";
-export * from "./MetamaskProvider";
 export * from "./FinProvider";
 export * from "./CompassProvider";

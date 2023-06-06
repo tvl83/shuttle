@@ -20,3 +20,7 @@ export function defaultBech32Config(
 export function nonNullable<T>(value: T): value is NonNullable<T> {
   return value !== null && value !== undefined;
 }
+
+export const hexToBase64 = (hex: any) => {
+  return Buffer.from(hex.startsWith("0x") ? hex.slice(2) : hex, "hex").toString("base64");
+};
