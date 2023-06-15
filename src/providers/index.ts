@@ -9,3 +9,4 @@ export * from "./FalconProvider";
 export * from "./CosmostationProvider";
 export * from "./FinProvider";
 export * from "./CompassProvider";
+export * from "./ShellProvider";
