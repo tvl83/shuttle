@@ -5,8 +5,6 @@ import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { SignMode } from "cosmjs-types/cosmos/tx/signing/v1beta1/signing";
 import { TxRaw, TxBody, AuthInfo, Fee as CosmosFee } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { PubKey } from "cosmjs-types/cosmos/crypto/secp256k1/keys";
-import { BaseAccount, ChainRestAuthApi } from "@injectivelabs/sdk-ts";
-import { BigNumberInBase } from "@injectivelabs/utils";
 
 import type { SigningResult } from "../../internals/transactions";
 import type { TransactionMsg } from "../../internals/transactions/messages";
@@ -14,7 +12,6 @@ import type { WalletConnection } from "../../internals/wallet";
 import type { Coin, Fee } from "../../internals/cosmos";
 import type { Network } from "../../internals/network";
 import { DEFAULT_CURRENCY, DEFAULT_GAS_PRICE } from "../../internals/network";
-import { isInjectiveNetwork } from "../../internals/injective";
 
 export class AminoSigningClient {
   static async prepare({
@@ -48,32 +45,16 @@ export class AminoSigningClient {
       gas: gasLimit || gas,
     };
 
-    if (isInjectiveNetwork(network.chainId)) {
-      const chainRestAuthApi = new ChainRestAuthApi(overrides?.rest ?? network.rest);
-      const accountDetailsResponse = await chainRestAuthApi.fetchAccount(wallet.account.address);
-      const baseAccount = BaseAccount.fromRestApi(accountDetailsResponse);
-      accountNumber = baseAccount.accountNumber.toString() || "";
-      sequence = baseAccount.sequence.toString() || "";
+    const client = await CosmWasmClient.connect(overrides?.rpc ?? network.rpc);
+    const accountInfo = await client.getAccount(wallet.account.address);
+    accountNumber = accountInfo?.accountNumber.toString() || "";
+    sequence = accountInfo?.sequence.toString() || "";
 
-      if (feeAmount && feeAmount != "auto") {
-        feeAmount = String(new BigNumberInBase(feeAmount).times(10 ** (feeCurrency.coinDecimals - 6)).toFixed(0));
-        fee = {
-          amount: [{ amount: feeAmount || gas, denom: feeCurrency.coinMinimalDenom }],
-          gas: gasLimit || gas,
-        };
-      }
-    } else {
-      const client = await CosmWasmClient.connect(overrides?.rpc ?? network.rpc);
-      const accountInfo = await client.getAccount(wallet.account.address);
-      accountNumber = accountInfo?.accountNumber.toString() || "";
-      sequence = accountInfo?.sequence.toString() || "";
-
-      if (feeAmount && feeAmount != "auto") {
-        fee = {
-          amount: [{ amount: feeAmount || gas, denom: feeCurrency.coinMinimalDenom }],
-          gas: gasLimit || gas,
-        };
-      }
+    if (feeAmount && feeAmount != "auto") {
+      fee = {
+        amount: [{ amount: feeAmount || gas, denom: feeCurrency.coinMinimalDenom }],
+        gas: gasLimit || gas,
+      };
     }
 
     return {
@@ -87,7 +68,6 @@ export class AminoSigningClient {
   }
 
   static async finish({
-    network,
     messages,
     signResponse,
     memo,
@@ -109,10 +89,6 @@ export class AminoSigningClient {
           {
             publicKey: {
               typeUrl: (() => {
-                if (isInjectiveNetwork(network.chainId)) {
-                  return "/injective.crypto.v1beta1.ethsecp256k1.PubKey";
-                }
-
                 return "/cosmos.crypto.secp256k1.PubKey";
               })(),
               value: PubKey.encode({

@@ -2,7 +2,6 @@ import { DirectSignResponse, OfflineDirectSigner, OfflineSigner } from "@cosmjs/
 import { Algo, AminoSignResponse, OfflineAminoSigner, StdSignDoc } from "@cosmjs/amino";
 import { GasPrice } from "@cosmjs/stargate";
 import { SignDoc } from "cosmjs-types/cosmos/tx/v1beta1/tx";
-import { toBase64 } from "@injectivelabs/sdk-ts";
 
 import { WalletExtensionProvider } from "../../../providers";
 import { nonNullable } from "../../../utils";
@@ -20,8 +19,8 @@ import { BroadcastResult, SigningResult, TransactionMsg } from "../../../interna
 import OfflineDirectSigningClient from "../../../internals/cosmos/OfflineDirectSigningClient";
 import { BroadcastClient } from "../../../internals/cosmos";
 import SignAndBroadcastClient from "../../../internals/cosmos/SignAndBroadcastClient";
-import { isInjectiveNetwork } from "../../../internals/injective";
 import { ExtensionProviderAdapter } from "./";
+import { toBase64 } from "@cosmjs/encoding/build/base64";
 
 interface VectisChainInfo extends Network {
   rpcUrl: string;
@@ -236,7 +235,7 @@ export class Vectis implements ExtensionProviderAdapter {
       throw new Error(`${this.name} is not available`);
     }
 
-    if (wallet.account.isLedger || isInjectiveNetwork(network.chainId)) {
+    if (wallet.account.isLedger ) {
       const signResult = await this.sign(provider, {
         network,
         wallet,

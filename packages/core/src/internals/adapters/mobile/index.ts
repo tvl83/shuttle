@@ -55,4 +55,3 @@ export interface MobileProviderAdapter {
 
 export * from "./wallet-connect";
 export * from "./CosmosWalletConnect";
-export * from "./EvmWalletConnect";

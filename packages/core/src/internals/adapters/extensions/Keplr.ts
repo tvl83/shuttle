@@ -18,9 +18,9 @@ import type { BroadcastResult, SigningResult } from "../../../internals/transact
 import type { TransactionMsg } from "../../../internals/transactions/messages";
 import { Algos, type Algo, type WalletConnection } from "../../../internals/wallet";
 import type WalletExtensionProvider from "../../../providers/extensions/WalletExtensionProvider";
-import { isInjectiveNetwork } from "../../../internals/injective";
+// import { isInjectiveNetwork } from "../../../internals/injective";
 import AminoSigningClient from "../../../internals/cosmos/AminoSigningClient";
-import InjectiveEIP712SigningClient from "../../../internals/cosmos/InjectiveEIP712SigningClient";
+// import InjectiveEIP712SigningClient from "../../../internals/cosmos/InjectiveEIP712SigningClient";
 import OfflineDirectSigningClient from "../../../internals/cosmos/OfflineDirectSigningClient";
 import { ArbitrarySigningClient, BroadcastClient } from "../../../internals/cosmos";
 import SignAndBroadcastClient from "../../../internals/cosmos/SignAndBroadcastClient";
@@ -256,37 +256,6 @@ export class Keplr implements ExtensionProviderAdapter {
       throw new Error(`${this.name} is not available`);
     }
 
-    if (isInjectiveNetwork(network.chainId)) {
-      const {
-        messages: preparedMessages,
-        eip712TypedData,
-        signDoc,
-      } = await InjectiveEIP712SigningClient.prepare({
-        network,
-        wallet,
-        messages,
-        feeAmount,
-        gasLimit,
-        memo,
-        overrides,
-      });
-
-      const signResponse = await this.keplr.experimentalSignEIP712CosmosTx_v0(
-        network.chainId,
-        wallet.account.address,
-        eip712TypedData,
-        signDoc,
-      );
-
-      return await InjectiveEIP712SigningClient.finish({
-        network,
-        pubKey: wallet.account.pubkey || "",
-        messages: preparedMessages,
-        signDoc: signResponse.signed,
-        signature: Buffer.from(signResponse.signature.signature, "base64"),
-      });
-    }
-
     const signDoc = await AminoSigningClient.prepare({
       network,
       wallet,
@@ -305,8 +274,8 @@ export class Keplr implements ExtensionProviderAdapter {
       signResponse,
     });
   }
-
   async signAndBroadcast(
+    // @ts-ignore
     provider: WalletExtensionProvider,
     {
       network,
@@ -330,7 +299,7 @@ export class Keplr implements ExtensionProviderAdapter {
       throw new Error(`${this.name} is not available`);
     }
 
-    if (wallet.account.isLedger || isInjectiveNetwork(network.chainId)) {
+    if (wallet.account.isLedger) {
       const signResult = await this.sign(provider, {
         network,
         wallet,

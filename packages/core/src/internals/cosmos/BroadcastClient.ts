@@ -4,7 +4,6 @@ import { BroadcastMode, TxRestApi } from "@injectivelabs/sdk-ts";
 
 import { BroadcastResult, SigningResult } from "../../internals/transactions";
 import { Network } from "../../internals/network";
-import { isInjectiveNetwork } from "../../internals/injective";
 
 export class BroadcastClient {
   static async execute({
@@ -19,9 +18,6 @@ export class BroadcastClient {
       rest?: string;
     };
   }): Promise<BroadcastResult> {
-    if (isInjectiveNetwork(network.chainId)) {
-      return await this.injective({ network, signResult, overrides });
-    }
 
     return await this.cosmos({ network, signResult, overrides });
   }
