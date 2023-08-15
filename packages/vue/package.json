@@ -37,7 +37,7 @@
     "vue": ">=3"
   },
   "dependencies": {
-    "@delphi-labs/shuttle": "workspace:*",
+    "shuttle": "workspace:*",
     "pinia": "^2.1.3",
     "tslib": "^2.6.0",
     "tsup": "^7.1.0",

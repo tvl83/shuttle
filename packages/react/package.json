@@ -1,7 +1,7 @@
 {
-  "name": "@delphi-labs/shuttle-react",
+  "name": "shuttle-react",
   "version": "3.8.0",
-  "description": "Shuttle is open-source npm package designed to turn wallet connections into a plug-and-play Lego brick for Cosmos Dapps.",
+  "description": "MODIFIED: tvl83. Removed traces of EVM. Shuttle is open-source npm package designed to turn wallet connections into a plug-and-play Lego brick for Cosmos Dapps.",
   "keywords": [
     "dapp",
     "blockchain",
@@ -37,7 +37,7 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@delphi-labs/shuttle": "workspace:*",
+    "shuttle": "workspace:*",
     "tslib": "^2.6.0",
     "tsup": "^7.1.0",
     "use-local-storage-state": "^18.3.3",
