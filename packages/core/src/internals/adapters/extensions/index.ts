@@ -1,7 +1,7 @@
-import type { Network } from "../../../internals/network";
-import type { BroadcastResult, SigningResult } from "../../../internals/transactions";
+import type { Network } from "../../network";
+import type { BroadcastResult, SigningResult } from "../../transactions";
 import type { TransactionMsg } from "../../../internals/transactions/messages";
-import type { WalletConnection } from "../../../internals/wallet";
+import type { WalletConnection } from "../../wallet";
 import type WalletExtensionProvider from "../../../providers/extensions/WalletExtensionProvider";
 
 export interface ExtensionProviderAdapter {
